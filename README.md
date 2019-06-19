@@ -1,2 +1,0 @@
-# HexBoard
-Created with CodeSandbox
