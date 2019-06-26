@@ -1,15 +1,117 @@
+import "./styles.css";
 import React from "react";
 import ReactDOM from "react-dom";
 import styled from "@emotion/styled";
+import { range } from "ramda";
 
-import "./styles.css";
-
-function Board({ width = 600, height = 600, ...props }) {
+function Board({ radius, ...props }) {
   const Layout = styled.div`
-    width: ${width}px;
-    height: ${height}px;
+    position: relative;
+    width: 100vw;
+    height: 100vh;
   `;
-  return <Layout>{props.children}</Layout>;
+  // Create a coordinate set for each hex cell
+  const drip = (from, fromSign, into, intoSign, prev) => {
+    if (!typeof from === "string" || from.length > 2 || from.length <= 0)
+      throw new Error(
+        `From must be one of the following strings: "x", "y", "z", "-x", "-y", "-z"`,
+      );
+    const incr = val => val + 1;
+    const decr = val => val - 1;
+    const fromOperator = fromSign === "+" ? decr : incr;
+    const intoOperator = intoSign === "+" ? incr : decr;
+    const newCoord = {
+      ...prev,
+      [from]: fromOperator(prev[from]),
+      [into]: intoOperator(prev[into]),
+    };
+    return newCoord;
+  };
+
+  const drain = (from, into, initialCoord) => {
+    const coords = [];
+    const fromSign = from.length === 1 ? "+" : from.charAt(0);
+    const intoSign = into.length === 1 ? "+" : into.charAt(0);
+    from = from.charAt(from.length - 1);
+    into = into.charAt(into.length - 1);
+    let shouldContinue = true;
+    while (shouldContinue) {
+      const getMostRecentCoord = () => coords[coords.length - 1];
+      const prevCoord = getMostRecentCoord() || initialCoord;
+      const coord = drip(from, fromSign, into, intoSign, prevCoord);
+      coords.push(coord);
+      if (Math.abs(coord[from]) === 0) {
+        shouldContinue = false;
+      }
+    }
+    return coords;
+  };
+  function createHexRing(radius) {
+    let hexCoords = [{ x: 0, y: radius, z: 0 }];
+    const getMostRecentCoord = () => hexCoords[hexCoords.length - 1];
+    hexCoords = hexCoords.concat(drain("y", "x", getMostRecentCoord()));
+    hexCoords = hexCoords.concat(drain("x", "z", getMostRecentCoord()));
+    hexCoords = hexCoords.concat(drain("z", "-y", getMostRecentCoord()));
+    hexCoords = hexCoords.concat(drain("-y", "-x", getMostRecentCoord()));
+    hexCoords = hexCoords.concat(drain("-x", "-z", getMostRecentCoord()));
+    hexCoords = hexCoords.concat(drain("-z", "y", getMostRecentCoord()));
+    console.log("hexCoords", hexCoords);
+    return hexCoords;
+  }
+  function createHexes() {
+    let coords = [{ x: 0, y: 0, z: 0 }];
+    for (const currentRing of range(1, radius + 1)) {
+      coords = coords.concat(createHexRing(currentRing));
+    }
+    return coords;
+  }
+  const allHexCoords = createHexes();
+
+  return (
+    <Layout>
+      {allHexCoords.map(coords => (
+        <Hex key={Object.values(coords).join(",")} coordinates={coords} />
+      ))}
+    </Layout>
+  );
+}
+
+// const b = new board({ x: [-3, 3], y: [-3, 3], z: [-3, 3] });
+
+function useHover() {
+  // onMouseDown onMouseEnter onMouseLeave onMouseMove onMouseOut onMouseOver onMouseUp
+  // const hoverRef = React.useRef();
+  const [hoverState, setHoverState] = React.useState({
+    isHovered: false,
+  });
+  const hoverProps = {
+    // onMouseDown: e => {},
+    onMouseEnter: e => {
+      setHoverState(state => ({
+        ...state,
+        isHovered: true,
+      }));
+    },
+    onMouseLeave: e => {
+      setHoverState(state => ({
+        ...state,
+        isHovered: false,
+      }));
+    },
+    onMouseMove: e => {
+      // console.log("onMouseMove", e.target);
+    },
+    onMouseOut: e => {
+      // console.log("onMouseOut", e.target);
+    },
+    onMouseOver: e => {
+      // console.log("onMouseOver", e.target);
+    },
+    onMouseUp: e => {
+      // console.log("onMouseUp", e.target);
+    },
+  };
+  return [hoverState, hoverProps];
 }
 
 function Hex({
@@ -17,16 +119,24 @@ function Hex({
   boardWidth = 600,
   coordinates = { x: 0, y: 0, z: 0 },
 }) {
+  const [hoverState, hoverProps] = useHover();
+  const { isHovered } = hoverState;
   const isOnAxis = {
     x: coordinates.y === 0 && coordinates.z === 0,
     y: coordinates.x === 0 && coordinates.z === 0,
     z: coordinates.x === 0 && coordinates.y === 0,
   };
-  const hexWidth = boardWidth / 7;
+  const hexWidth = boardWidth / 9;
   const hexHeight = (hexWidth * Math.sqrt(3)) / 2;
   const centerOffset = {
-    horizontal: 0,
-    vertical: (hexHeight - 2) * -coordinates.x,
+    horizontal:
+      0 * coordinates.x +
+      -1 * 0.75 * (hexWidth - 2) * coordinates.y +
+      0.75 * (hexWidth - 2) * coordinates.z,
+    vertical:
+      -1 * (hexHeight - 2) * coordinates.x +
+      ((-1 * hexHeight + 2) / 2) * coordinates.y +
+      ((-1 * hexHeight + 2) / 2) * coordinates.z,
   };
   const hexCenter = {
     horizontal: boardWidth / 2 + centerOffset.horizontal,
@@ -36,7 +146,6 @@ function Hex({
     vertical: -hexHeight / 2,
     horizontal: -hexWidth / 2,
   };
-  // 1/2 hex height + 3/4 hex width
   const HexSvg = styled.svg`
     height: ${hexHeight}px;
     width: ${hexWidth}px;
@@ -50,8 +159,9 @@ function Hex({
     fill: ${isOnAxis.y && "rgba(140,215,144,0.2)"};
     fill: ${isOnAxis.z && "rgba(48,162,222,0.2)"};
     fill: ${isOnAxis.x && isOnAxis.y && isOnAxis.z && "rgba(255,201,82,0.4)"};
+    /* fill: ${isHovered && "rgba(241,92,92,0.4)"} */
     stroke: #000000;
-    stroke-width: "4px";
+    stroke-width: "1px";
   `;
   const svgProps = {
     xmlns: "http://www.w3.org/2000/svg",
@@ -61,7 +171,10 @@ function Hex({
 
   return (
     <HexSvg {...svgProps} viewBox="0 0 300 260">
-      <HexPolygon points="296,130 225,256 75,256 4,130 75,4 225,4" />
+      <HexPolygon
+        {...hoverProps}
+        points="296,130 225,256 75,256 4,130 75,4 225,4"
+      />
       <text x="50%" y="25%" fill="red" textAnchor="middle" fontSize="48px">
         {coordinates.x}
       </text>
@@ -76,18 +189,7 @@ function Hex({
 }
 
 function App() {
-  return (
-    <Board>
-      <Hex coordinates={{ x: -3, y: 0, z: 0 }} />
-      <Hex coordinates={{ x: -2, y: 0, z: 0 }} />
-      <Hex coordinates={{ x: -1, y: 0, z: 0 }} />
-      <Hex coordinates={{ x: 0, y: 0, z: 0 }} />
-      <Hex coordinates={{ x: 1, y: 0, z: 0 }} />
-      <Hex coordinates={{ x: 2, y: 0, z: 0 }} />
-      <Hex coordinates={{ x: 3, y: 0, z: 0 }} />
-      {/* <Hex coordinates={{ x: 0, y: 0, z: 1 }} /> */}
-    </Board>
-  );
+  return <Board radius={4} />;
 }
 
 const rootElement = document.getElementById("root");
