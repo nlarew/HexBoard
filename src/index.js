@@ -3,6 +3,7 @@ import React from "react";
 import ReactDOM from "react-dom";
 import styled from "@emotion/styled";
 import { range } from "ramda";
+import ErrorBoundary from "react-error-boundary";
 
 function Board({ radius, ...props }) {
   const Layout = styled.div`
@@ -191,7 +192,11 @@ function Hex({
 }
 
 function App() {
-  return <Board radius={5} />;
+  return (
+    <ErrorBoundary>
+      <Board radius={5} />
+    </ErrorBoundary>
+  );
 }
 
 const rootElement = document.getElementById("root");
