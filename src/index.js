@@ -28,38 +28,45 @@ function Board({ radius, ...props }) {
     return newCoord;
   };
 
-  const drain = (from, into, initialCoord) => {
-    const coords = [];
+  const drain = (from, into, currentRadius, initialCoord) => {
     const fromSign = from.length === 1 ? "+" : from.charAt(0);
     const intoSign = into.length === 1 ? "+" : into.charAt(0);
     from = from.charAt(from.length - 1);
     into = into.charAt(into.length - 1);
+    const initial = initialCoord || {
+      x: 0,
+      y: 0,
+      z: 0,
+      [from]: currentRadius * (fromSign === "+" ? 1 : -1),
+    };
+    const coords = [initial];
     let shouldContinue = true;
     while (shouldContinue) {
-      const getMostRecentCoord = () => coords[coords.length - 1];
-      const prevCoord = getMostRecentCoord() || initialCoord;
+      if (coords.length === 0) coords.push(initial);
+      const prevCoord = coords[coords.length - 1];
       const coord = drip(from, fromSign, into, intoSign, prevCoord);
       coords.push(coord);
-      if (Math.abs(coord[from]) === 0) {
+      const distanceFromZero = Math.abs(coord[from]);
+      if (distanceFromZero <= 1) {
         shouldContinue = false;
       }
     }
-    return coords;
+    return currentRadius !== 1 ? coords : coords.slice(1);
   };
   function createHexRing(radius) {
-    let hexCoords = [{ x: 0, y: radius, z: 0 }];
-    const getMostRecentCoord = () => hexCoords[hexCoords.length - 1];
-    hexCoords = hexCoords.concat(drain("y", "x", getMostRecentCoord()));
-    hexCoords = hexCoords.concat(drain("x", "z", getMostRecentCoord()));
-    hexCoords = hexCoords.concat(drain("z", "-y", getMostRecentCoord()));
-    hexCoords = hexCoords.concat(drain("-y", "-x", getMostRecentCoord()));
-    hexCoords = hexCoords.concat(drain("-x", "-z", getMostRecentCoord()));
-    hexCoords = hexCoords.concat(drain("-z", "y", getMostRecentCoord()));
-    console.log("hexCoords", hexCoords);
+    let hexCoords = [];
+    hexCoords = hexCoords.concat(drain("+y", "+x", radius));
+    hexCoords = hexCoords.concat(drain("+x", "+z", radius));
+    hexCoords = hexCoords.concat(drain("+z", "-y", radius));
+    hexCoords = hexCoords.concat(drain("-y", "-x", radius));
+    hexCoords = hexCoords.concat(drain("-x", "-z", radius));
+    hexCoords = hexCoords.concat(drain("-z", "+y", radius));
+    console.log(`coords for ring(${radius})`, hexCoords);
     return hexCoords;
   }
   function createHexes() {
-    let coords = [{ x: 0, y: 0, z: 0 }];
+    const center = { x: 0, y: 0, z: 0 };
+    let coords = [center];
     for (const currentRing of range(1, radius + 1)) {
       coords = coords.concat(createHexRing(currentRing));
     }
@@ -70,13 +77,11 @@ function Board({ radius, ...props }) {
   return (
     <Layout>
       {allHexCoords.map(coords => (
-        <Hex key={Object.values(coords).join(",")} coordinates={coords} />
+        <Hex key={`${coords.x}.${coords.y}.${coords.z}`} coordinates={coords} />
       ))}
     </Layout>
   );
 }
-
-// const b = new board({ x: [-3, 3], y: [-3, 3], z: [-3, 3] });
 
 function useHover() {
   // onMouseDown onMouseEnter onMouseLeave onMouseMove onMouseOut onMouseOver onMouseUp
@@ -170,11 +175,8 @@ function Hex({
   };
 
   return (
-    <HexSvg {...svgProps} viewBox="0 0 300 260">
-      <HexPolygon
-        {...hoverProps}
-        points="296,130 225,256 75,256 4,130 75,4 225,4"
-      />
+    <HexSvg {...svgProps} {...hoverProps} viewBox="0 0 300 260">
+      <HexPolygon points="296,130 225,256 75,256 4,130 75,4 225,4" />
       <text x="50%" y="25%" fill="red" textAnchor="middle" fontSize="48px">
         {coordinates.x}
       </text>
@@ -189,7 +191,7 @@ function Hex({
 }
 
 function App() {
-  return <Board radius={4} />;
+  return <Board radius={5} />;
 }
 
 const rootElement = document.getElementById("root");
